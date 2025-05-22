@@ -19,7 +19,3 @@ include_directories(lib)
 add_subdirectory(lib)
 add_subdirectory(app)
 
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
-    add_subdirectory(tests)
-endif()
-

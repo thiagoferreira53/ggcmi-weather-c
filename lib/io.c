@@ -112,13 +112,50 @@ int InjectNetCdfInfo(Config *config, NetCdfInfo *info) {
           kTimeString, i + 1, nc_strerror(status));
       return 1;
     }
-    if ((status =
-             nc_get_att_float(config->mappings[i].netcdf_id, info[i].var_varid,
-                              kFillValueString, &info[i].fill_value))) {
-      fprintf(stderr,
-              "error: cannot find the fill value for %s in file #%zu: %s\n",
-              config->mappings[i].netcdf_var, i + 1, nc_strerror(status));
-      return 1;
+    
+    // Get file variable names
+    //int ncid = config->mappings[i].netcdf_id;
+    //int num_vars = 0;
+    //int retval;
+    //
+    //if ((retval = nc_inq(ncid, NULL, &num_vars, NULL, NULL))) {
+    //    fprintf(stderr, "Error inquiring file info: %s\n", nc_strerror(retval));
+    //    return 1;
+    //}
+    //
+    //printf("Variables in file #%zu:\n", i + 1);
+    //for (int varid = 0; varid < num_vars; ++varid) {
+    //    char var_name[NC_MAX_NAME + 1];
+    //    if ((retval = nc_inq_varname(ncid, varid, var_name))) {
+    //        fprintf(stderr, "  Error getting variable name (varid %d): %s\n", varid, nc_strerror(retval));
+    //    } else {
+    //        printf("  %s\n", var_name);
+    //    }
+    //}    
+    
+    status = nc_get_att_float(config->mappings[i].netcdf_id, info[i].var_varid,
+      "missing_value", &info[i].fill_value);
+    if (status == NC_NOERR) {
+    } else if (status == NC_ENOTATT) {
+    // Try "_FillValue" if "missing_value" not found
+    status = nc_get_att_float(config->mappings[i].netcdf_id, info[i].var_varid,
+              "_FillValue", &info[i].fill_value);
+    if (status == NC_NOERR) {
+    fprintf(stderr, "Info: using _FillValue instead of missing_value for variable '%s' in file #%zu\n",
+    config->mappings[i].netcdf_var, i + 1);
+    } else if (status == NC_ENOTATT) {
+    fprintf(stderr, "Warning: no fill value attribute found for variable '%s' in file #%zu. Using default.\n",
+    config->mappings[i].netcdf_var, i + 1);
+    info[i].fill_value = -9999.0;
+    } else {
+    fprintf(stderr, "Error reading _FillValue for variable '%s': %s\n",
+    config->mappings[i].netcdf_var, nc_strerror(status));
+    return 1;
+    }
+    } else {
+    fprintf(stderr, "Error reading missing_value for variable '%s': %s\n",
+    config->mappings[i].netcdf_var, nc_strerror(status));
+    return 1;
     }
     size_t unit_len = 0;
     if ((status = nc_inq_attlen(config->mappings[i].netcdf_id,

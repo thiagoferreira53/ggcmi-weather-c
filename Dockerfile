@@ -2,7 +2,7 @@ FROM debian:stable-slim
 
 RUN ln -sf /bin/bash /bin/sh && \
 apt-get update && \
-apt-get install curl git make cmake gcc g++ gcc-multilib valgrind ca-certificates vim-tiny pkg-config -y --no-install-recommends && \
+apt-get install curl git make cmake gcc g++ valgrind ca-certificates vim-tiny pkg-config -y --no-install-recommends && \
 apt-get install openmpi-bin openmpi-common libopenmpi-dev libjansson-dev -y --no-install-recommends
 
 RUN apt-get install  libcurl4 libcurl4-openssl-dev libz-dev libgdal-dev libudunits2-dev libudunits2-data -y --no-install-recommends && \

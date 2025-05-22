@@ -11,3 +11,6 @@ data
 /tests/cmake_install.cmake
 
 compile_commands.json
+/example/
+/samples/
+/batch_file/
