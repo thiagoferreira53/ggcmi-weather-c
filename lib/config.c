@@ -275,12 +275,16 @@ Config *LoadConfig(const char *source) {
         InsertConfigString(value, "targetUnit");
     config->mappings[index].netcdf_id = -1;
     config->mappings[index].is_temp = 0;
+    config->mappings[index].is_rh = 0;
     if (config->mappings[index].dssat_var != NULL) {
       if (strlen(config->mappings[index].dssat_var) == 4) {
         if (strncmp("TMIN", config->mappings[index].dssat_var, 4) == 0) {
           config->mappings[index].is_temp = 1;
         } else if (strncmp("TMAX", config->mappings[index].dssat_var, 4) == 0) {
           config->mappings[index].is_temp = 2;
+        } else if (strncmp("HURS", config->mappings[index].dssat_var, 4) == 0) {
+          //printf("HURS found in config\n");
+          config->mappings[index].is_rh = 1;
         }
       }
     }

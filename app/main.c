@@ -5,6 +5,7 @@
 
 #include <mpi.h>
 #include <netcdf.h>
+#include <math.h>
 
 #include "calendar.h"
 #include "config.h"
@@ -17,6 +18,109 @@ static void resetDailyAvg(float *daily_avg) {
   for (size_t i = 0; i < 31; ++i) {
     daily_avg[i] = -99.9f;
   }
+}
+
+void daylen(int doy, float xlat, float *dayl, float *sndn, float *snup) {
+  const float PI = 3.14159f;
+  const float RAD = PI / 180.0f;
+  float dec; 
+
+  dec = -23.45f * cosf(2.0f * PI * (doy + 10.0f) / 365.0f);
+
+  float soc = tanf(RAD * (dec)) * tanf(RAD * xlat);
+
+  if (soc < -1.0f) soc = -1.0f;
+  if (soc > 1.0f) soc = 1.0f;
+
+  float angle = soc;
+  float result = angle;
+  float term = angle;
+  float angle_squared = angle * angle;
+
+  for (int n = 1; n < 10; ++n) {
+    term *= angle_squared * (2 * n - 1) / (2 * n);
+    result += term / (2 * n + 1);
+  }
+
+  *dayl = 12.0f + 24.0f * result / PI;
+
+  if (*dayl < 0.0f) *dayl = 0.0f;
+  if (*dayl > 24.0f) *dayl = 24.0f;
+
+  *snup = 12.0f - (*dayl) / 2.0f;
+  *sndn = 12.0f + (*dayl) / 2.0f;
+}
+
+
+int calculate_RH90(int doy, float xlat, float tmin, float tmax, float rh_daily) {
+  const float A = 2.0f;
+  const float B = 2.2f;
+  const float C = 1.0f;
+  const float PI = 3.14159f;
+  const float RAD = PI / 180.0f;
+
+  float dec, dayl, snup, sndn;
+
+  dec = 0.4093f * sinf((2.0f * PI * (float)doy / 365.0f) - 1.405f);
+
+  float latr = xlat * RAD;
+  float tanlat = tanf(latr);
+  float tandec = tanf(dec);
+
+  float cos_h = -tanlat * tandec;
+  if (cos_h < -1.0f) cos_h = -1.0f;
+  if (cos_h >  1.0f) cos_h =  1.0f;
+
+  float h = acosf(cos_h);
+  dayl = 2.0f * h / (PI / 12.0f);
+
+  snup = 12.0f - (dayl / 2.0f);
+  sndn = 12.0f + (dayl / 2.0f);
+
+  float minTime = snup + C;
+  float maxTime = minTime + dayl / 2.0f + A;
+
+  float t = 0.5f * PI * (sndn - minTime) / (maxTime - minTime);
+  float tsndn = tmin + (tmax - tmin) * sinf(t);
+
+  float tmin_i = (tmin - tsndn * expf(-B)) / (1.0f - expf(-B));
+
+  float hdecay = 24.0f + C - dayl;
+
+  int count = 0;
+
+  for (int h = 0; h < 24; h++) {
+      float hs = (float)h;
+      float tairhr;
+
+      if (hs >= snup + C && hs <= sndn) {
+          t = 0.5f * PI * (hs - minTime) / (maxTime - minTime);
+          tairhr = tmin + (tmax - tmin) * sinf(t);
+      } else {
+          if (hs < snup + C) {
+              t = 24.0f + hs - sndn;
+          } else {
+              t = hs - sndn;
+          }
+          float arg = -B * t / hdecay;
+          tairhr = tmin_i + (tsndn - tmin_i) * expf(arg);
+      }
+
+      float DEWP = tairhr - ((100.0f - rh_daily) / 5.0f);
+      
+      float ES = 6.11f * powf(10.0f, (7.5f * tairhr) / (237.7f + tairhr));
+      float E  = 6.11f * powf(10.0f, (7.5f * DEWP) / (237.7f + DEWP));
+      float RH = (E / ES) * 100.0f;
+      
+      if (RH > 100.0f) RH = 100.0f;
+
+      if (RH >= 90.0f) count++;
+      
+      printf("Hour: %d, Tair: %.2f, DEWP: %.2f, RH: %.2f, count: %d\n", h, tairhr, DEWP, RH, count);
+
+  }
+
+  return count;
 }
 
 static float calculateMonthlyAvg(const float *daily_avg) {
@@ -167,6 +271,9 @@ int main(int argc, char **argv) {
   float tmaxavg = -99.9f;
   float tmin = -99.9f;
   float tmax = -99.9f;
+  float hurs = -99.9f;
+  float rh90_hours = -99.9f;
+  char EstRH90 = 'Y';
   float mavg;
   float davg;
   float raw_value;
@@ -204,6 +311,9 @@ int main(int argc, char **argv) {
             tmin = value;
           } else if (config->mappings[m].is_temp == 2) {
             tmax = value;
+          } 
+          if (config->mappings[m].is_rh == 1) {
+            hurs = value;
           }
         }
         if (tmax != 99.9f && tmin != 99.9f) {
@@ -241,18 +351,30 @@ int main(int argc, char **argv) {
       GenerateFileName(global_pos, config->output_dir, filename);
       FILE *fh = fopen(filename, "w");
       if (fh != NULL) {
-        fprintf(fh, "*WEATHER DATA: GGCMI\n\n");
+        fprintf(fh, "$WEATHER DATA: GGCMI\n\n");
         fprintf(fh, "@ INSI      LAT     LONG  ELEV   TAV   AMP REFHT WNDHT\n");
         fprintf(fh, " GGCMI %8.2f %8.2f %5d %5.1f %5.1f\n", global_ll.latitude,
                 global_ll.longitude, -99, (monthly_sum / months),
                 tmaxavg - tminavg);
-        fprintf(fh, "@DATE");
+        fprintf(fh, "@  DATE");
         for (size_t i = 0; i < config->num_mappings; ++i) {
           fprintf(fh, "  %4s", config->mappings[i].dssat_var);
+        }
+        if (EstRH90 == 'Y') {
+          fprintf(fh,"  %4s", "RH90");
         }
         fprintf(fh, "\n");
         ParseDate(start_date_str, &date);
         for (size_t d = 0; d < h.edges.days; ++d) {
+          if (EstRH90 == 'Y') {
+            int doy = start_date_str;
+            float dayl;
+            float sndn; 
+            float snup;
+            daylen(doy, global_ll.latitude, &dayl, &sndn, &snup);
+            rh90_hours = calculate_RH90(doy, global_ll.latitude, tmin, tmax, hurs);
+            printf("rh90_hours: %f , %f \n", rh90_hours, hurs);
+          }
           DateAsDSSAT4String(&date, date_str);
           fprintf(fh, "%s", date_str);
           for (size_t m = 0; m < config->num_mappings; ++m) {
@@ -260,6 +382,9 @@ int main(int argc, char **argv) {
                 (m * h.flat_size) + HyperslabValueIndex(h, Position(d, x, y));
             fprintf(fh, " %5.1f", converted_values[index]);
           }
+          if (EstRH90 == 'Y') {
+              fprintf(fh, " %5.1f", rh90_hours);
+            } 
           AddOneDay(&date);
           fprintf(fh, "\n");
         }

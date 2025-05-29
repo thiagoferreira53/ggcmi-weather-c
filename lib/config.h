@@ -12,6 +12,7 @@ typedef struct FileConfig_ {
   char *target_unit;
   int netcdf_id;
   int is_temp;
+  int is_rh;
 } FileConfig;
 
 typedef struct Config_ {
