@@ -52,30 +52,11 @@ void daylen(int doy, float xlat, float *dayl, float *sndn, float *snup) {
 }
 
 
-int calculate_RH90(int doy, float xlat, float tmin, float tmax, float rh_daily) {
+int calculate_RH90(int doy, float xlat, float tmin, float tmax, float rh_daily, float dayl, float sndn, float snup) {
   const float A = 2.0f;
   const float B = 2.2f;
   const float C = 1.0f;
   const float PI = 3.14159f;
-  const float RAD = PI / 180.0f;
-
-  float dec, dayl, snup, sndn;
-
-  dec = 0.4093f * sinf((2.0f * PI * (float)doy / 365.0f) - 1.405f);
-
-  float latr = xlat * RAD;
-  float tanlat = tanf(latr);
-  float tandec = tanf(dec);
-
-  float cos_h = -tanlat * tandec;
-  if (cos_h < -1.0f) cos_h = -1.0f;
-  if (cos_h >  1.0f) cos_h =  1.0f;
-
-  float h = acosf(cos_h);
-  dayl = 2.0f * h / (PI / 12.0f);
-
-  snup = 12.0f - (dayl / 2.0f);
-  sndn = 12.0f + (dayl / 2.0f);
 
   float minTime = snup + C;
   float maxTime = minTime + dayl / 2.0f + A;
@@ -90,17 +71,16 @@ int calculate_RH90(int doy, float xlat, float tmin, float tmax, float rh_daily) 
   int count = 0;
 
   for (int h = 0; h < 24; h++) {
-      float hs = (float)h;
       float tairhr;
 
-      if (hs >= snup + C && hs <= sndn) {
-          t = 0.5f * PI * (hs - minTime) / (maxTime - minTime);
+      if (h >= snup + C && h <= sndn) {
+          t = 0.5f * PI * (h - minTime) / (maxTime - minTime);
           tairhr = tmin + (tmax - tmin) * sinf(t);
       } else {
-          if (hs < snup + C) {
-              t = 24.0f + hs - sndn;
+          if (h < snup + C) {
+              t = 24.0f + h - sndn;
           } else {
-              t = hs - sndn;
+              t = h - sndn;
           }
           float arg = -B * t / hdecay;
           tairhr = tmin_i + (tsndn - tmin_i) * expf(arg);
@@ -110,13 +90,16 @@ int calculate_RH90(int doy, float xlat, float tmin, float tmax, float rh_daily) 
       
       float ES = 6.11f * powf(10.0f, (7.5f * tairhr) / (237.7f + tairhr));
       float E  = 6.11f * powf(10.0f, (7.5f * DEWP) / (237.7f + DEWP));
-      float RH = (E / ES) * 100.0f;
+      //float RH = (E / ES) * 100.0f;
+      
+      //testing
+      float RH = ((E / ES) * 100.0f)+15;
       
       if (RH > 100.0f) RH = 100.0f;
 
       if (RH >= 90.0f) count++;
       
-      printf("Hour: %d, Tair: %.2f, DEWP: %.2f, RH: %.2f, count: %d\n", h, tairhr, DEWP, RH, count);
+      //printf("Hour: %d, RH_CMIP6 %.2f, RH: %.2f, count: %d, tmin: %.2f tmax: %.2f tairhr: %.2f\n", h, rh_daily, RH, count, tmin, tmax, tairhr);
 
   }
 
@@ -211,6 +194,7 @@ int main(int argc, char **argv) {
       (float *)malloc(sizeof(float) * config->num_mappings * h.flat_size);
   float *converted_values =
       (float *)malloc(sizeof(float) * config->num_mappings * h.flat_size);
+  float *rh90_hours = malloc(sizeof(float) * h.edges.days);
 
   InitUnitSystem();
   ConverterContainer converters[config->num_mappings];
@@ -272,7 +256,6 @@ int main(int argc, char **argv) {
   float tmin = -99.9f;
   float tmax = -99.9f;
   float hurs = -99.9f;
-  float rh90_hours = -99.9f;
   char EstRH90 = 'Y';
   float mavg;
   float davg;
@@ -293,6 +276,8 @@ int main(int argc, char **argv) {
   for (size_t x = 0; x < h.edges.x_length; ++x) {
     for (size_t y = 0; y < h.edges.y_length; ++y) {
       ParseDate(start_date_str, &date);
+      XY global_pos = XYPosition(h.corner.x + x, h.corner.y + y);
+      LonLat global_ll = XYToLonLat(global_pos);     
       for (size_t d = 0; d < h.edges.days; ++d) {
         for (size_t m = 0; m < config->num_mappings; ++m) {
           index = (m * h.flat_size) + HyperslabValueIndex(h, Position(d, x, y));
@@ -320,6 +305,18 @@ int main(int argc, char **argv) {
           davg = (tmax + tmin) / 2.0f;
           daily_avg[date.day_of_month - 1] = davg;
         }
+        
+        if (EstRH90 == 'Y' && tmin != -99.9f && tmax != -99.9f && hurs != -99.9f) {
+          float dayl;
+          float sndn; 
+          float snup;
+          int doy = GetDOY(&date);
+          daylen(doy, global_ll.latitude, &dayl, &sndn, &snup);
+          rh90_hours[d] = calculate_RH90(doy, global_ll.latitude, tmin, tmax, hurs, dayl, sndn, snup);
+          //printf("doy: %d, latitude: %.2f, longitude: %.2f, tmin: %.2f, tmax: %.2f, hurs: %.2f, dayl: %.2f, sndn: %.2f, snup: %.2f, rh90_hours: %.2f\n", 
+          //  doy, global_ll.latitude,global_ll.longitude, tmin, tmax, hurs, dayl, sndn, snup, rh90_hours[d]);
+        }
+        
         counter++;
         AddOneDay(&date);
         if (current_month != date.month) {
@@ -342,8 +339,6 @@ int main(int argc, char **argv) {
           resetDailyAvg(daily_avg);
         }
       }
-      XY global_pos = XYPosition(h.corner.x + x, h.corner.y + y);
-      LonLat global_ll = XYToLonLat(global_pos);
       // Now we write out the file
       fprintf(debug, "%.2f,%.2f,%zu\n", global_ll.longitude, global_ll.latitude,
               XYToGlobalId(global_pos));
@@ -366,15 +361,6 @@ int main(int argc, char **argv) {
         fprintf(fh, "\n");
         ParseDate(start_date_str, &date);
         for (size_t d = 0; d < h.edges.days; ++d) {
-          if (EstRH90 == 'Y') {
-            int doy = start_date_str;
-            float dayl;
-            float sndn; 
-            float snup;
-            daylen(doy, global_ll.latitude, &dayl, &sndn, &snup);
-            rh90_hours = calculate_RH90(doy, global_ll.latitude, tmin, tmax, hurs);
-            printf("rh90_hours: %f , %f \n", rh90_hours, hurs);
-          }
           DateAsDSSAT4String(&date, date_str);
           fprintf(fh, "%s", date_str);
           for (size_t m = 0; m < config->num_mappings; ++m) {
@@ -383,8 +369,8 @@ int main(int argc, char **argv) {
             fprintf(fh, " %5.1f", converted_values[index]);
           }
           if (EstRH90 == 'Y') {
-              fprintf(fh, " %5.1f", rh90_hours);
-            } 
+              fprintf(fh,"  %4.1f", rh90_hours[d]);
+          }
           AddOneDay(&date);
           fprintf(fh, "\n");
         }
@@ -422,6 +408,7 @@ release_resources:
   free(converted_values);
   converted_values = NULL;
   free(values);
+  free(rh90_hours);
   values = NULL;
   CloseAllDataFiles(config, info);
   FreeConfig(config);

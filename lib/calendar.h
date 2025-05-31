@@ -21,6 +21,7 @@ int ValidDate(const date_t *date);
 int CreateDate(int year, int month, int day_of_month, date_t *date);
 int ParseDate(const char *date_string, date_t *date);
 int AddOneDay(date_t *date);
+int GetDOY(const date_t *date);
 size_t DateAsString(const date_t *date, char *dest_str);
 size_t DateAsDSSAT2String(const date_t *date, char *dest_str);
 size_t DateAsDSSAT4String(const date_t *date, char *dest_str);
