@@ -86,21 +86,24 @@ int calculate_RH90(int doy, float xlat, float tmin, float tmax, float rh_daily, 
           tairhr = tmin_i + (tsndn - tmin_i) * expf(arg);
       }
 
-      float DEWP = tairhr - ((100.0f - rh_daily) / 5.0f);
+      float tavg = (tmin + tmax) / 2.0f;
+      //float DEWP = tairhr - ((100.0f - rh_daily) / 5.0f);
+      float DEWP = tavg - ((100.0f - rh_daily) / 5.0f); //updated DEWP calculation to use tavg instead of tairhr
       
-      float ES = 6.11f * powf(10.0f, (7.5f * tairhr) / (237.7f + tairhr));
-      float E  = 6.11f * powf(10.0f, (7.5f * DEWP) / (237.7f + DEWP));
+      //update ES and E calculations based on https://www.weather.gov/media/epz/wxcalc/vaporPressure.pdf
+      float ES = 6.11f * powf(10.0f, (7.5f * tairhr) / (237.3f + tairhr));
+      float E  = 6.11f * powf(10.0f, (7.5f * DEWP) / (237.3f + DEWP));
       //float RH = (E / ES) * 100.0f;
       
-      //testing
-      float RH = ((E / ES) * 100.0f)+15;
-      
+
+      // August-Roche-Magnus formula for relative humidity
+      float RH = 100 * (expf((17.625f * DEWP) / (243.04f + DEWP)) / expf((17.625f * tairhr) / (243.04f + tairhr)));
+
       if (RH > 100.0f) RH = 100.0f;
 
       if (RH >= 90.0f) count++;
       
-      //printf("Hour: %d, RH_CMIP6 %.2f, RH: %.2f, count: %d, tmin: %.2f tmax: %.2f tairhr: %.2f\n", h, rh_daily, RH, count, tmin, tmax, tairhr);
-
+      //printf("Hour: %d, RH_CMIP6 %.2f, RH: %.2f, count: %d tmin: %.2f tmax: %.2f tairhr: %.2f\n", h, rh_daily, RH, count, tmin, tmax, tairhr);
   }
 
   return count;
