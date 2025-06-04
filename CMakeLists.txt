@@ -13,7 +13,7 @@ find_package(MPI REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(JANSSON REQUIRED IMPORTED_TARGET jansson)
 pkg_check_modules(NETCDF REQUIRED IMPORTED_TARGET netcdf)
-pkg_check_modules(UDUNITS REQUIRED IMPORTED_TARGET udunits)
+pkg_check_modules(UDUNITS REQUIRED IMPORTED_TARGET udunits2)
 
 include_directories(lib)
 add_subdirectory(lib)
