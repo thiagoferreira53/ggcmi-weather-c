@@ -411,8 +411,9 @@ release_resources:
   free(converted_values);
   converted_values = NULL;
   free(values);
-  free(rh90_hours);
   values = NULL;
+  free(rh90_hours);
+  rh90_hours = NULL;
   CloseAllDataFiles(config, info);
   FreeConfig(config);
   config = NULL;
