@@ -246,9 +246,13 @@ int main(int argc, char **argv) {
         fprintf(fh, " GGCMI %8.2f %8.2f %5d %5.1f %5.1f\n", global_ll.latitude,
                 global_ll.longitude, -99, (monthly_sum / months),
                 tmaxavg - tminavg);
-        fprintf(fh, "@DATE");
+        fprintf(fh, "@  DATE");
         for (size_t i = 0; i < config->num_mappings; ++i) {
+          if (config->mappings[i].dssat_var == "OZON7") {
+            fprintf(fh, " %4s", config->mappings[i].dssat_var);
+          }else {
           fprintf(fh, "  %4s", config->mappings[i].dssat_var);
+          }
         }
         fprintf(fh, "\n");
         ParseDate(start_date_str, &date);
