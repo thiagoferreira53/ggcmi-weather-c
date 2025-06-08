@@ -156,7 +156,7 @@ size_t DateAsDSSAT2String(const date_t *date, char *dest_str) {
   return size >= D2DDATE_STRING_LEN;
 }
 
-size_t DateAsDSSAT4String(date_t *date, char *dest_str) {
+size_t DateAsDSSAT4String(const date_t *date, char *dest_str) {
   int doy = GetDOY(date);
   size_t size =
       snprintf(dest_str, D4DDATE_STRING_LEN, "%d%03d", date->year, doy);
