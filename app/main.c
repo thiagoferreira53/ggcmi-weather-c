@@ -248,10 +248,10 @@ int main(int argc, char **argv) {
                 tmaxavg - tminavg);
         fprintf(fh, "@  DATE");
         for (size_t i = 0; i < config->num_mappings; ++i) {
-          if (config->mappings[i].dssat_var == "OZON7") {
-            fprintf(fh, " %4s", config->mappings[i].dssat_var);
-          }else {
-          fprintf(fh, "  %4s", config->mappings[i].dssat_var);
+          if (strcmp(config->mappings[i].dssat_var, "OZON7") == 0) {
+            fprintf(fh, " %3s", config->mappings[i].dssat_var);
+          } else {
+            fprintf(fh, "  %4s", config->mappings[i].dssat_var);
           }
         }
         fprintf(fh, "\n");
