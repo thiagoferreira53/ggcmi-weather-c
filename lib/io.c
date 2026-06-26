@@ -10,10 +10,31 @@
 #include "io.h"
 
 static const char *kLongitudeString = "lon";
+static const char *kLongitudeAltString = "longitude";
 static const char *kLatitudeString = "lat";
+static const char *kLatitudeAltString = "latitude";
 static const char *kTimeString = "time";
+static const char *kTimeAltString = "tstep";
 static const char *kFillValueString = "missing_value";
 static const char *kUnitString = "units";
+
+// Helper function to try both dimension name conventions
+static int try_inq_dimid(int ncid, const char *name1, const char *name2, int *dimid) {
+  int status = nc_inq_dimid(ncid, name1, dimid);
+  if (status != NC_NOERR && name2 != NULL) {
+    status = nc_inq_dimid(ncid, name2, dimid);
+  }
+  return status;
+}
+
+// Helper function to try both variable name conventions
+static int try_inq_varid(int ncid, const char *name1, const char *name2, int *varid) {
+  int status = nc_inq_varid(ncid, name1, varid);
+  if (status != NC_NOERR && name2 != NULL) {
+    status = nc_inq_varid(ncid, name2, varid);
+  }
+  return status;
+}
 
 int OpenAllDataFiles(Config *config, MPI_Comm mpi_comm, MPI_Info mpi_info) {
   for (size_t i = 0; i < config->num_mappings; ++i) {
@@ -45,15 +66,15 @@ int InjectNetCdfInfo(Config *config, NetCdfInfo *info) {
       return 1;
     }
     // Fill the NetCdfInfo
-    if ((status = nc_inq_varid(config->mappings[i].netcdf_id, kLongitudeString,
-                               &info[i].longitude_varid))) {
-      fprintf(stderr, "error: cannot find longitude varid for file #%zu: %s\n",
+    if ((status = try_inq_varid(config->mappings[i].netcdf_id, kLongitudeString,
+                                kLongitudeAltString, &info[i].longitude_varid))) {
+      fprintf(stderr, "error: cannot find longitude/lon varid for file #%zu: %s\n",
               i + 1, nc_strerror(status));
       return 1;
     }
-    if ((status = nc_inq_varid(config->mappings[i].netcdf_id, kLatitudeString,
-                               &info[i].latitude_varid))) {
-      fprintf(stderr, "error: cannot find latitude varid for file #%zu: %s\n",
+    if ((status = try_inq_varid(config->mappings[i].netcdf_id, kLatitudeString,
+                                kLatitudeAltString, &info[i].latitude_varid))) {
+      fprintf(stderr, "error: cannot find latitude/lat varid for file #%zu: %s\n",
               i + 1, nc_strerror(status));
       return 1;
     }
@@ -70,9 +91,9 @@ int InjectNetCdfInfo(Config *config, NetCdfInfo *info) {
               config->mappings[i].netcdf_var, i + 1, nc_strerror(status));
       return 1;
     }
-    if ((status = nc_inq_dimid(config->mappings[i].netcdf_id, kLongitudeString,
-                               &dimid))) {
-      fprintf(stderr, "error: cannot find longitude dimid for file #%zu: %s\n",
+    if ((status = try_inq_dimid(config->mappings[i].netcdf_id, kLongitudeString,
+                                kLongitudeAltString, &dimid))) {
+      fprintf(stderr, "error: cannot find longitude/lon dimid for file #%zu: %s\n",
               i + 1, nc_strerror(status));
       return 1;
     }
@@ -80,13 +101,13 @@ int InjectNetCdfInfo(Config *config, NetCdfInfo *info) {
                                 &info[i].longitude_len))) {
       fprintf(
           stderr,
-          "error: cannot find the dimension length for %s in file #%zu: %s\n",
-          kLongitudeString, i + 1, nc_strerror(status));
+          "error: cannot find the dimension length for longitude/lon in file #%zu: %s\n",
+          i + 1, nc_strerror(status));
       return 1;
     }
-    if ((status = nc_inq_dimid(config->mappings[i].netcdf_id, kLatitudeString,
-                               &dimid))) {
-      fprintf(stderr, "error: cannot find latitude dimid for file #%zu: %s\n",
+    if ((status = try_inq_dimid(config->mappings[i].netcdf_id, kLatitudeString,
+                                kLatitudeAltString, &dimid))) {
+      fprintf(stderr, "error: cannot find latitude/lat dimid for file #%zu: %s\n",
               i + 1, nc_strerror(status));
       return 1;
     }
@@ -94,22 +115,31 @@ int InjectNetCdfInfo(Config *config, NetCdfInfo *info) {
                                 &info[i].latitude_len))) {
       fprintf(
           stderr,
-          "error: cannot find the dimension length for %s in file #%zu: %s\n",
-          kLatitudeString, i + 1, nc_strerror(status));
+          "error: cannot find the dimension length for latitude/lat in file #%zu: %s\n",
+          i + 1, nc_strerror(status));
       return 1;
     }
-    if ((status = nc_inq_dimid(config->mappings[i].netcdf_id, kTimeString,
-                               &dimid))) {
-      fprintf(stderr, "error: cannot find time dimid for file #%zu: %s\n",
+    if ((status = try_inq_dimid(config->mappings[i].netcdf_id, kTimeString,
+                                kTimeAltString, &dimid))) {
+      fprintf(stderr, "error: cannot find time/tstep dimid for file #%zu: %s\n",
               i + 1, nc_strerror(status));
+      fprintf(stderr, "File: %s\n", config->mappings[i].file_name);
+      fprintf(stderr, "Attempting to list all dimensions in this file:\n");
+      for (int d = 0; d < inq.num_dims; d++) {
+        char dim_name[NC_MAX_NAME + 1];
+        size_t dim_len;
+        if (nc_inq_dim(config->mappings[i].netcdf_id, d, dim_name, &dim_len) == NC_NOERR) {
+          fprintf(stderr, "  Dimension %d: %s (length=%zu)\n", d, dim_name, dim_len);
+        }
+      }
       return 1;
     }
     if ((status = nc_inq_dimlen(config->mappings[i].netcdf_id, dimid,
                                 &info[i].time_len))) {
       fprintf(
           stderr,
-          "error: cannot find the dimension length for %s in file #%zu: %s\n",
-          kTimeString, i + 1, nc_strerror(status));
+          "error: cannot find the dimension length for time/tstep in file #%zu: %s\n",
+          i + 1, nc_strerror(status));
       return 1;
     }
     

@@ -220,7 +220,7 @@ int main(int argc, char **argv) {
       fprintf(stderr,
               "error: unable to extract values from %s for variable "
               "%s.\n\t%s\n\tCorner: %d, %d, %d\n\tEdges: %d, %d, %d\n",
-              config->mappings[m].file_name, config->mappings->netcdf_var,
+              config->mappings[m].file_name, config->mappings[m].netcdf_var,
               nc_strerror(status), h.corner.day, h.corner.x, h.corner.y,
               h.edges.days, h.edges.x_length, h.edges.y_length);
       app_status = EXIT_FAILURE;
